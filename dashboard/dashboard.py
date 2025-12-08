@@ -95,40 +95,42 @@ with tab1:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Кількість транзакцій")
+        st.subheader("Кількість транзакцій (загальна за 6 годин)")
         transactions_data = fetch_api("/transactions_count_last_6_hours")
         
         if transactions_data and transactions_data.get("count"):
-            # Підготовка даних для графіка
+            # Новий формат: загальна сума для кожного символу
             all_data = []
-            for symbol, values in transactions_data["count"].items():
-                for item in values:
-                    all_data.append({
-                        "symbol": symbol,
-                        "hour_start": pd.to_datetime(item["hour_start"]),
-                        "transaction_count": item["transaction_count"]
-                    })
+            for symbol, data in transactions_data["count"].items():
+                all_data.append({
+                    "symbol": symbol,
+                    "total_transaction_count": data.get("total_transaction_count", 0)
+                })
             
             if all_data:
                 df_transactions = pd.DataFrame(all_data)
                 
                 # Фільтр за символом
-                if selected_symbol:
+                if selected_symbol and selected_symbol in df_transactions["symbol"].values:
                     df_filtered = df_transactions[df_transactions["symbol"] == selected_symbol]
                 else:
                     df_filtered = df_transactions
                 
                 if not df_filtered.empty:
-                    fig = px.line(
+                    fig = px.bar(
                         df_filtered,
-                        x="hour_start",
-                        y="transaction_count",
-                        color="symbol",
-                        title="Кількість транзакцій по годинах",
-                        labels={"hour_start": "Час", "transaction_count": "Кількість транзакцій"}
+                        x="symbol",
+                        y="total_transaction_count",
+                        title="Загальна кількість транзакцій за 6 годин",
+                        labels={"symbol": "Символ", "total_transaction_count": "Кількість транзакцій"},
+                        color="total_transaction_count",
+                        color_continuous_scale="viridis"
                     )
-                    fig.update_layout(height=400)
+                    fig.update_layout(height=400, xaxis_tickangle=-45)
                     st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Таблиця з даними
+                    st.dataframe(df_filtered, use_container_width=True, hide_index=True)
                 else:
                     st.info("Немає даних для вибраного символу")
             else:
@@ -137,23 +139,22 @@ with tab1:
             st.warning("Не вдалося отримати дані про транзакції")
     
     with col2:
-        st.subheader("Обсяг торгівлі")
+        st.subheader("Обсяг торгівлі (загальний за 6 годин)")
         volume_data = fetch_api("/trade_volume_last_6_hours")
         
         if volume_data and volume_data.get("count"):
+            # Новий формат: загальна сума для кожного символу
             all_data = []
-            for symbol, values in volume_data["count"].items():
-                for item in values:
-                    all_data.append({
-                        "symbol": symbol,
-                        "hour_start": pd.to_datetime(item["hour_start"]),
-                        "total_trade_volume": item["total_trade_volume"]
-                    })
+            for symbol, data in volume_data["count"].items():
+                all_data.append({
+                    "symbol": symbol,
+                    "total_trade_volume": data.get("total_trade_volume", 0.0)
+                })
             
             if all_data:
                 df_volume = pd.DataFrame(all_data)
                 
-                if selected_symbol:
+                if selected_symbol and selected_symbol in df_volume["symbol"].values:
                     df_filtered = df_volume[df_volume["symbol"] == selected_symbol]
                 else:
                     df_filtered = df_volume
@@ -161,14 +162,18 @@ with tab1:
                 if not df_filtered.empty:
                     fig = px.bar(
                         df_filtered,
-                        x="hour_start",
+                        x="symbol",
                         y="total_trade_volume",
-                        color="symbol",
-                        title="Обсяг торгівлі по годинах",
-                        labels={"hour_start": "Час", "total_trade_volume": "Обсяг торгівлі"}
+                        title="Загальний обсяг торгівлі за 6 годин",
+                        labels={"symbol": "Символ", "total_trade_volume": "Обсяг торгівлі"},
+                        color="total_trade_volume",
+                        color_continuous_scale="plasma"
                     )
-                    fig.update_layout(height=400)
+                    fig.update_layout(height=400, xaxis_tickangle=-45)
                     st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Таблиця з даними
+                    st.dataframe(df_filtered, use_container_width=True, hide_index=True)
                 else:
                     st.info("Немає даних для вибраного символу")
             else:

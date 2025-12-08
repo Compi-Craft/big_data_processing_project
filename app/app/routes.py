@@ -30,24 +30,25 @@ def transactions_count_last_6_hours(db: Session = Depends(get_db)):
     end_time = now
     start_time = end_time - timedelta(hours=6)
 
+    # Агрегуємо загальну кількість транзакцій за 6 годин для кожного символу
     results = db.query(
         SymbolStatsLastHour.symbol,
-        SymbolStatsLastHour.hour_start,
-        SymbolStatsLastHour.transaction_count
+        func.sum(SymbolStatsLastHour.transaction_count).label("total_transaction_count")
     ).filter(
         SymbolStatsLastHour.hour_start >= start_time,
         SymbolStatsLastHour.hour_start < end_time
+    ).group_by(
+        SymbolStatsLastHour.symbol
     ).order_by(
-        SymbolStatsLastHour.symbol,
-        SymbolStatsLastHour.hour_start
+        SymbolStatsLastHour.symbol
     ).all()
 
-    data = defaultdict(list)
+    # Повертаємо загальну суму для кожного символу
+    data = {}
     for row in results:
-        data[row.symbol].append({
-            "hour_start": row.hour_start.isoformat(),
-            "transaction_count": row.transaction_count
-        })
+        data[row.symbol] = {
+            "total_transaction_count": int(row.total_transaction_count) if row.total_transaction_count else 0
+        }
 
     return {"count": data}
 
@@ -57,24 +58,25 @@ def trade_volume_last_6_hours(db: Session = Depends(get_db)):
     end_time = now
     start_time = end_time - timedelta(hours=6)
 
+    # Агрегуємо загальний обсяг торгівлі за 6 годин для кожного символу
     results = db.query(
         SymbolStatsLastHour.symbol,
-        SymbolStatsLastHour.hour_start,
-        SymbolStatsLastHour.total_trade_volume
+        func.sum(SymbolStatsLastHour.total_trade_volume).label("total_volume")
     ).filter(
         SymbolStatsLastHour.hour_start >= start_time,
         SymbolStatsLastHour.hour_start < end_time
+    ).group_by(
+        SymbolStatsLastHour.symbol
     ).order_by(
-        SymbolStatsLastHour.symbol,
-        SymbolStatsLastHour.hour_start
+        SymbolStatsLastHour.symbol
     ).all()
 
-    data = defaultdict(list)
+    # Повертаємо загальну суму для кожного символу
+    data = {}
     for row in results:
-        data[row.symbol].append({
-            "hour_start": row.hour_start.isoformat(),
-            "total_trade_volume": row.total_trade_volume
-        })
+        data[row.symbol] = {
+            "total_trade_volume": float(row.total_volume) if row.total_volume else 0.0
+        }
 
     return {"count": data}
 
