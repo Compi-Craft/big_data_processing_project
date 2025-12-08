@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import time
+import numpy as np
 
 # Конфігурація сторінки
 st.set_page_config(
@@ -79,6 +80,9 @@ else:
 # Вибір символу для детального аналізу
 selected_symbol = st.sidebar.selectbox("Виберіть символ", options=symbols_list if symbols_list else ["XBTUSD"])
 
+# Опція логарифмічної шкали
+use_log_scale = st.sidebar.checkbox("📊 Використовувати логарифмічну шкалу", value=False, help="Корисно для даних з великою різницею між значеннями")
+
 # Tabs для різних секцій
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📈 Статистика за 6 годин",
@@ -110,20 +114,28 @@ with tab1:
             if all_data:
                 df_transactions = pd.DataFrame(all_data)
                 
-                # Фільтр за символом
-                if selected_symbol and selected_symbol in df_transactions["symbol"].values:
-                    df_filtered = df_transactions[df_transactions["symbol"] == selected_symbol]
-                else:
-                    df_filtered = df_transactions
+                # Завжди показуємо всі монети
+                df_filtered = df_transactions
                 
                 if not df_filtered.empty:
+                    # Підготовка даних для графіка
+                    plot_data = df_filtered.copy()
+                    y_column = "total_transaction_count"
+                    y_label = "Кількість транзакцій"
+                    
+                    if use_log_scale:
+                        # Додаємо 1 перед логарифмуванням, щоб уникнути log(0)
+                        plot_data["log_value"] = np.log1p(plot_data[y_column])
+                        y_column = "log_value"
+                        y_label = "Кількість транзакцій (log scale)"
+                    
                     fig = px.bar(
-                        df_filtered,
+                        plot_data,
                         x="symbol",
-                        y="total_transaction_count",
-                        title="Загальна кількість транзакцій за 6 годин",
-                        labels={"symbol": "Символ", "total_transaction_count": "Кількість транзакцій"},
-                        color="total_transaction_count",
+                        y=y_column,
+                        title="Загальна кількість транзакцій за 6 годин" + (" (логарифмічна шкала)" if use_log_scale else ""),
+                        labels={"symbol": "Символ", y_column: y_label},
+                        color=y_column,
                         color_continuous_scale="viridis"
                     )
                     fig.update_layout(height=400, xaxis_tickangle=-45)
@@ -132,7 +144,7 @@ with tab1:
                     # Таблиця з даними
                     st.dataframe(df_filtered, use_container_width=True, hide_index=True)
                 else:
-                    st.info("Немає даних для вибраного символу")
+                    st.info("Немає даних про транзакції")
             else:
                 st.warning("Немає даних про транзакції")
         else:
@@ -154,19 +166,28 @@ with tab1:
             if all_data:
                 df_volume = pd.DataFrame(all_data)
                 
-                if selected_symbol and selected_symbol in df_volume["symbol"].values:
-                    df_filtered = df_volume[df_volume["symbol"] == selected_symbol]
-                else:
-                    df_filtered = df_volume
+                # Завжди показуємо всі монети
+                df_filtered = df_volume
                 
                 if not df_filtered.empty:
+                    # Підготовка даних для графіка
+                    plot_data = df_filtered.copy()
+                    y_column = "total_trade_volume"
+                    y_label = "Обсяг торгівлі"
+                    
+                    if use_log_scale:
+                        # Додаємо 1 перед логарифмуванням, щоб уникнути log(0)
+                        plot_data["log_value"] = np.log1p(plot_data[y_column])
+                        y_column = "log_value"
+                        y_label = "Обсяг торгівлі (log scale)"
+                    
                     fig = px.bar(
-                        df_filtered,
+                        plot_data,
                         x="symbol",
-                        y="total_trade_volume",
-                        title="Загальний обсяг торгівлі за 6 годин",
-                        labels={"symbol": "Символ", "total_trade_volume": "Обсяг торгівлі"},
-                        color="total_trade_volume",
+                        y=y_column,
+                        title="Загальний обсяг торгівлі за 6 годин" + (" (логарифмічна шкала)" if use_log_scale else ""),
+                        labels={"symbol": "Символ", y_column: y_label},
+                        color=y_column,
                         color_continuous_scale="plasma"
                     )
                     fig.update_layout(height=400, xaxis_tickangle=-45)
@@ -175,7 +196,7 @@ with tab1:
                     # Таблиця з даними
                     st.dataframe(df_filtered, use_container_width=True, hide_index=True)
                 else:
-                    st.info("Немає даних для вибраного символу")
+                    st.info("Немає даних про обсяг торгівлі")
             else:
                 st.warning("Немає даних про обсяг торгівлі")
         else:
@@ -201,34 +222,51 @@ with tab2:
         if all_data:
             df_stats = pd.DataFrame(all_data)
             
-            # Фільтр за символом
-            if selected_symbol:
-                df_filtered = df_stats[df_stats["symbol"] == selected_symbol]
-            else:
-                df_filtered = df_stats
+            # Завжди показуємо всі монети
+            df_filtered = df_stats
             
             if not df_filtered.empty:
                 col1, col2 = st.columns(2)
                 
                 with col1:
+                    # Підготовка даних для графіка транзакцій
+                    plot_data1 = df_filtered.copy()
+                    y_column1 = "transaction_count"
+                    y_label1 = "Кількість"
+                    
+                    if use_log_scale:
+                        plot_data1["log_transaction_count"] = np.log1p(plot_data1[y_column1])
+                        y_column1 = "log_transaction_count"
+                        y_label1 = "Кількість (log scale)"
+                    
                     fig1 = px.line(
-                        df_filtered,
+                        plot_data1,
                         x="hour_start",
-                        y="transaction_count",
+                        y=y_column1,
                         color="symbol",
-                        title="Кількість транзакцій",
-                        labels={"hour_start": "Час", "transaction_count": "Кількість"}
+                        title="Кількість транзакцій" + (" (логарифмічна шкала)" if use_log_scale else ""),
+                        labels={"hour_start": "Час", y_column1: y_label1}
                     )
                     st.plotly_chart(fig1, use_container_width=True)
                 
                 with col2:
+                    # Підготовка даних для графіка обсягу
+                    plot_data2 = df_filtered.copy()
+                    y_column2 = "total_trade_volume"
+                    y_label2 = "Обсяг"
+                    
+                    if use_log_scale:
+                        plot_data2["log_volume"] = np.log1p(plot_data2[y_column2])
+                        y_column2 = "log_volume"
+                        y_label2 = "Обсяг (log scale)"
+                    
                     fig2 = px.area(
-                        df_filtered,
+                        plot_data2,
                         x="hour_start",
-                        y="total_trade_volume",
+                        y=y_column2,
                         color="symbol",
-                        title="Обсяг торгівлі",
-                        labels={"hour_start": "Час", "total_trade_volume": "Обсяг"}
+                        title="Обсяг торгівлі" + (" (логарифмічна шкала)" if use_log_scale else ""),
+                        labels={"hour_start": "Час", y_column2: y_label2}
                     )
                     st.plotly_chart(fig2, use_container_width=True)
                 
@@ -240,7 +278,7 @@ with tab2:
                     hide_index=True
                 )
             else:
-                st.info("Немає даних для вибраного символу")
+                st.info("Немає даних")
         else:
             st.warning("Немає даних")
     else:
@@ -250,36 +288,60 @@ with tab2:
 with tab3:
     st.header("Детальний аналіз транзакцій")
     
+    # Ініціалізація session state для збереження результатів
+    if "detail_analysis_result" not in st.session_state:
+        st.session_state.detail_analysis_result = None
+    if "detail_symbol" not in st.session_state:
+        st.session_state.detail_symbol = selected_symbol
+    if "detail_minutes" not in st.session_state:
+        st.session_state.detail_minutes = 5
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        symbol_input = st.text_input("Символ", value=selected_symbol)
+        # Визначаємо індекс для selectbox
+        symbol_options = symbols_list if symbols_list else ["XBTUSD"]
+        default_index = 0
+        if selected_symbol in symbol_options:
+            default_index = symbol_options.index(selected_symbol)
+        symbol_input = st.selectbox("Символ", options=symbol_options, index=default_index)
     
     with col2:
-        n_minutes = st.number_input("Кількість хвилин", min_value=1, max_value=1440, value=5)
+        n_minutes = st.number_input("Кількість хвилин", min_value=1, max_value=1440, value=st.session_state.detail_minutes)
     
-    if st.button("Отримати дані", type="primary"):
+    if st.button("Отримати дані", type="primary", key="get_detail_data"):
         if symbol_input:
             transactions_count = fetch_api(
                 "/transactions_in_last_n_min",
                 params={"symbol": symbol_input, "n_minutes": n_minutes}
             )
             
-            if transactions_count:
-                st.success(f"✅ Символ: **{transactions_count.get('symbol')}**")
-                st.metric(
-                    "Кількість транзакцій",
-                    transactions_count.get("number_of_trades", 0)
-                )
-                
-                # Візуалізація
-                st.subheader("Інформація")
-                st.info(
-                    f"За останні **{n_minutes} хвилин** для символу **{symbol_input}** "
-                    f"було виконано **{transactions_count.get('number_of_trades', 0)}** транзакцій."
-                )
-            else:
-                st.error("Не вдалося отримати дані")
+            # Зберігаємо результат в session state
+            st.session_state.detail_analysis_result = transactions_count
+            st.session_state.detail_symbol = symbol_input
+            st.session_state.detail_minutes = n_minutes
+    
+    # Відображаємо результат, якщо він є
+    if st.session_state.detail_analysis_result:
+        transactions_count = st.session_state.detail_analysis_result
+        symbol_display = st.session_state.detail_symbol
+        minutes_display = st.session_state.detail_minutes
+        
+        if transactions_count:
+            st.success(f"✅ Символ: **{symbol_display}**")
+            st.metric(
+                "Кількість транзакцій",
+                transactions_count.get("number_of_trades", 0)
+            )
+            
+            # Візуалізація
+            st.subheader("Інформація")
+            st.info(
+                f"За останні **{minutes_display} хвилин** для символу **{symbol_display}** "
+                f"було виконано **{transactions_count.get('number_of_trades', 0)}** транзакцій."
+            )
+        else:
+            st.error("Не вдалося отримати дані")
 
 # TAB 4: Топ обсяги
 with tab4:
@@ -292,14 +354,24 @@ with tab4:
     if top_volumes and top_volumes.get("top_symbols"):
         df_top = pd.DataFrame(top_volumes["top_symbols"])
         
+        # Підготовка даних для графіка
+        plot_data = df_top.copy()
+        y_column = "total_volume"
+        y_label = "Обсяг торгівлі"
+        
+        if use_log_scale:
+            plot_data["log_volume"] = np.log1p(plot_data[y_column])
+            y_column = "log_volume"
+            y_label = "Обсяг торгівлі (log scale)"
+        
         # Графік
         fig = px.bar(
-            df_top,
+            plot_data,
             x="symbol",
-            y="total_volume",
-            title=f"Топ {top_n} символів за обсягом (остання година)",
-            labels={"symbol": "Символ", "total_volume": "Обсяг торгівлі"},
-            color="total_volume",
+            y=y_column,
+            title=f"Топ {top_n} символів за обсягом (остання година)" + (" (логарифмічна шкала)" if use_log_scale else ""),
+            labels={"symbol": "Символ", y_column: y_label},
+            color=y_column,
             color_continuous_scale="viridis"
         )
         fig.update_layout(height=500, xaxis_tickangle=-45)
@@ -318,12 +390,21 @@ with tab4:
 with tab5:
     st.header("Поточні ціни символів")
     
+    # Ініціалізація session state для збереження вибраних символів
+    if "selected_price_symbols" not in st.session_state:
+        st.session_state.selected_price_symbols = [selected_symbol] if selected_symbol in symbols_list else []
+    
     # Мультиселект для вибору символів
     selected_symbols = st.multiselect(
         "Виберіть символи",
         options=symbols_list,
-        default=[selected_symbol] if selected_symbol in symbols_list else []
+        default=st.session_state.selected_price_symbols,
+        key="price_symbols_selector"
     )
+    
+    # Оновлюємо session state при зміні вибору
+    if selected_symbols != st.session_state.selected_price_symbols:
+        st.session_state.selected_price_symbols = selected_symbols
     
     if selected_symbols:
         prices_data = []
@@ -337,27 +418,40 @@ with tab5:
             df_prices = pd.DataFrame(prices_data)
             df_prices.columns = ["Symbol", "Sell Price", "Buy Price"]
             
+            # Підготовка даних для графіка з урахуванням логарифмічної шкали
+            plot_data = df_prices.copy()
+            sell_col = "Sell Price"
+            buy_col = "Buy Price"
+            y_label = "Ціна"
+            
+            if use_log_scale:
+                plot_data["log_sell_price"] = np.log1p(plot_data[sell_col])
+                plot_data["log_buy_price"] = np.log1p(plot_data[buy_col])
+                sell_col = "log_sell_price"
+                buy_col = "log_buy_price"
+                y_label = "Ціна (log scale)"
+            
             # Візуалізація
             col1, col2 = st.columns(2)
             
             with col1:
                 fig = go.Figure()
                 fig.add_trace(go.Bar(
-                    x=df_prices["Symbol"],
-                    y=df_prices["Sell Price"],
+                    x=plot_data["Symbol"],
+                    y=plot_data[sell_col],
                     name="Sell Price",
                     marker_color="red"
                 ))
                 fig.add_trace(go.Bar(
-                    x=df_prices["Symbol"],
-                    y=df_prices["Buy Price"],
+                    x=plot_data["Symbol"],
+                    y=plot_data[buy_col],
                     name="Buy Price",
                     marker_color="green"
                 ))
                 fig.update_layout(
-                    title="Поточні ціни покупки та продажу",
+                    title="Поточні ціни покупки та продажу" + (" (логарифмічна шкала)" if use_log_scale else ""),
                     xaxis_title="Символ",
-                    yaxis_title="Ціна",
+                    yaxis_title=y_label,
                     barmode="group",
                     height=400
                 )
