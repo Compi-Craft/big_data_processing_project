@@ -50,7 +50,7 @@ df_transformed = (df
                         F.explode("msg.data").alias("data")
                     ).withColumn(
                         "currenttimestamp",
-                        F.to_timestamp("data.timestamp") + F.expr("INTERVAL 3 HOURS")
+                        F.to_timestamp("data.timestamp") + F.expr("INTERVAL 2 HOURS")
                     ).select(
                         "currenttimestamp",
                         "data.symbol",

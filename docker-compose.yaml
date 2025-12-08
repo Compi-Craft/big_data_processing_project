@@ -20,7 +20,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: authdb
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "user", "-d", "auth_db", "-h", "localhost", "-p", "5432"]
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "authdb", "-h", "localhost", "-p", "5432"]
       interval: 10s
       retries: 5
       start_period: 30s
@@ -120,6 +120,7 @@ services:
     build:
       context: ./app/
     container_name: app
+    restart: always
     command: [python, app.py]
     ports:
       - "8000:8000"
@@ -140,6 +141,7 @@ services:
     image: docker.io/spark:3.5.1
     container_name: spark-master
     user: root
+    restart: always
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "-h", "spark-master"]
     environment:
       - SPARK_MASTER_HOST=spark-master
@@ -160,6 +162,7 @@ services:
     image: docker.io/spark:3.5.1
     container_name: spark-worker
     user: root
+    restart: always
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
     environment:
       - SPARK_WORKER_MEMORY=4G
@@ -235,6 +238,7 @@ services:
   
   spark-submitter-job:
     user: root
+    restart: always
     networks:
       - internal-network
     volumes:

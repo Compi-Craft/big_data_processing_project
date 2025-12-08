@@ -5,7 +5,7 @@ from datetime import datetime
 Base = declarative_base()
 
 def default_hour_start():
-    now = datetime.utcnow()
+    now = datetime.now()
     return now.replace(minute=0, second=0, microsecond=0)
 
 class SymbolStatsLastHour(Base):

@@ -1,1 +1,1 @@
-0 * * * * root /opt/app/spark-cron.sh >> /var/log/spark-job.log 2>&1
+0 * * * * /opt/app/spark-cron.sh >> /var/log/spark-job.log 2>&1
