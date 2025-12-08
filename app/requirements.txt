@@ -1,0 +1,7 @@
+fastapi
+cassandra-driver
+uvicorn
+pandas
+sqlalchemy
+pydantic
+psycopg2-binary

@@ -1,0 +1,255 @@
+x-spark-common: &spark-common
+  image: docker.io/spark:3.5.1
+  user: root
+  networks:
+    - internal-network
+  volumes:
+    - "./:/opt/app"
+    - "./jars/:/opt/spark-jars"
+  working_dir: /opt/app
+
+services:
+
+  db:
+    image: postgres:15
+    networks:
+      - internal-network
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: authdb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user", "-d", "auth_db", "-h", "localhost", "-p", "5432"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    networks:
+      - internal-network
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    environment:
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    mem_limit: 1g
+    mem_reservation: 512m
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "SELECT release_version FROM system.local;"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+    restart: always
+    volumes:
+      - "./setup:/opt/app:ro"
+    networks:
+      - internal-network
+
+  cassandra-init:
+    image: cassandra:4.1
+    container_name: cassandra-init
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      - internal-network
+    volumes:
+      - "./setup:/opt/app:ro"
+    command: ["sh", "-c", "cqlsh cassandra -f /opt/app/cassandra_setup.cql"]
+
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: zookeeper
+    networks:
+      - internal-network
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_started
+      cassandra:
+        condition: service_healthy
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal-network
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-init
+    depends_on:
+      - kafka
+    volumes:
+      - ./setup:/opt/app/:ro
+    command: ["bash", "/opt/app/kafka_setup.sh"]
+    networks:
+      - internal-network
+
+  app:
+    build:
+      context: ./app/
+    container_name: app
+    command: [python, app.py]
+    ports:
+      - "8000:8000"
+    networks:
+      - internal-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  spark:
+    image: docker.io/spark:3.5.1
+    container_name: spark-master
+    user: root
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "-h", "spark-master"]
+    environment:
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - '8080:8080'
+      - '7077:7077'
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - internal-network
+
+  spark-worker:
+    image: docker.io/spark:3.5.1
+    container_name: spark-worker
+    user: root
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      - SPARK_WORKER_MEMORY=4G
+      - SPARK_WORKER_CORES=4
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    depends_on:
+      - spark
+    networks:
+      - internal-network
+
+  trades-generator:
+    build:
+      context: ./sender_trades/
+    container_name: trades-generator
+    command: ["python", "/app/sender.py"]
+    networks:
+      - internal-network
+    restart: always
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  orders-generator:
+    build:
+      context: ./sender_orders/
+    container_name: orders-generator
+    command: ["python3", "/app/sender.py"]
+    networks:
+      - internal-network
+    restart: always
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  spark-submitter-trades:
+    <<: *spark-common
+    container_name: spark-submitter-trades
+    command: >
+      /opt/spark/bin/spark-submit 
+        --conf spark.jars.ivy=/opt/app 
+        --jars /opt/spark-jars/*.jar
+        --master spark://spark-master:7077 
+        --deploy-mode client 
+        --conf spark.executor.memory=512m 
+        --conf spark.cores.max=1 
+        streaming_scripts/process_trades_postgres.py
+    depends_on:
+      app:
+        condition: service_healthy
+      spark:
+        condition: service_started
+
+  spark-submitter-orders:
+    <<: *spark-common
+    container_name: spark-submitter-orders
+    command: >
+      /opt/spark/bin/spark-submit 
+        --conf spark.jars.ivy=/opt/app 
+        --jars /opt/spark-jars/*.jar
+        --master spark://spark-master:7077 
+        --deploy-mode client 
+        --conf spark.executor.memory=512m 
+        --conf spark.cores.max=1 
+        streaming_scripts/process_orders.py
+    depends_on:
+      app:
+        condition: service_healthy
+      spark:
+        condition: service_started
+  
+  spark-submitter-job:
+    user: root
+    networks:
+      - internal-network
+    volumes:
+      - "./jars/:/opt/spark-jars"
+    working_dir: /opt/app
+    container_name: spark-submitter-job
+    build:
+      context: ./jobs/
+    depends_on:
+      app:
+        condition: service_healthy
+
+networks:
+  internal-network:
+
+volumes:
+  pgdata:
+  pgadmin-data:
