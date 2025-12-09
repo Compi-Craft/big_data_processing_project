@@ -112,13 +112,13 @@ with tab1:
                     y_col = "log_val"
                 
                 fig = px.bar(plot_df, x="symbol", y=y_col, title="Транзакції (6г)", color=y_col)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Таблиця з оригінальними даними (не логарифмованими)
                 df_display = df.copy()
                 df_display.columns = ["Символ", "Кількість транзакцій"]
                 df_display = df_display.sort_values("Кількість транзакцій", ascending=False)
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
+                st.dataframe(df_display, width='stretch', hide_index=True)
                 
                 # Кнопка експорту CSV
                 csv_data = df_display.to_csv(index=False, encoding='utf-8-sig')
@@ -146,7 +146,7 @@ with tab1:
                     plot_df["log_val"] = np.log1p(plot_df["val"])
                     y_col = "log_val"
                 fig = px.bar(plot_df, x="symbol", y=y_col, title="Обсяг (6г)", color=y_col, color_continuous_scale="plasma")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Таблиця з оригінальними даними (не логарифмованими)
                 df_display = df.copy()
@@ -156,7 +156,7 @@ with tab1:
                 # Створюємо копію для відображення (з форматуванням)
                 df_display_formatted = df_display.copy()
                 df_display_formatted["Обсяг торгівлі"] = df_display_formatted["Обсяг торгівлі"].apply(lambda x: f"{x:,.2f}")
-                st.dataframe(df_display_formatted, use_container_width=True, hide_index=True)
+                st.dataframe(df_display_formatted, width='stretch', hide_index=True)
                 
                 # Кнопка експорту CSV (з оригінальними числовими значеннями)
                 csv_data = df_display.to_csv(index=False, encoding='utf-8-sig')
@@ -195,7 +195,7 @@ with tab2:
                     df["log_count"] = np.log1p(df["count"])
                     y_col = "log_count"
                 fig = px.line(df, x="hour", y=y_col, color="symbol", title="Кількість транзакцій" + (" (логарифмічна шкала)" if use_log_scale else ""))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             with col2:
                 y_col = "volume"
                 if use_log_scale:
@@ -203,7 +203,7 @@ with tab2:
                     y_col = "log_vol"
                 fig = px.line(df.sort_values(["symbol", "hour"]), x="hour", y=y_col, color="symbol", title="Обсяг" + (" (логарифмічна шкала)" if use_log_scale else ""))
                 fig.update_traces(fill='tozeroy', mode='lines+markers')
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             # Таблиця з детальними даними
             st.subheader("Детальна таблиця статистики")
@@ -222,7 +222,7 @@ with tab2:
             df_display = df_display.sort_values(["Година", "Символ"], ascending=[False, True])
             df_export = df_export.sort_values(["Година", "Символ"], ascending=[False, True])
             
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_display, width='stretch', hide_index=True)
             
             # Кнопка експорту CSV
             csv_data = df_export.to_csv(index=False, encoding='utf-8-sig')
@@ -252,7 +252,7 @@ with tab3:
 # TAB 4: Топ обсяги
 with tab4:
     st.header("Топ символів за обсягом")
-    top_n = st.slider("Кількість символів", 1, 10, 5, key="top_n_slider")
+    top_n = st.slider("Кількість символів", 1, 5, 3, key="top_n_slider")
     top_v = fetch_api("/top_n_highest_volumes", params={"top_n": top_n})
     if top_v and top_v.get("top_symbols"):
         df = pd.DataFrame(top_v["top_symbols"])
@@ -276,8 +276,8 @@ with tab4:
             labels={"symbol": "Символ", y_col: y_label}
         )
         fig.update_layout(height=500, xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.plotly_chart(fig, width='stretch')
+        st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.warning("Не вдалося отримати дані про топ обсяги")
 
@@ -347,11 +347,11 @@ with tab5:
                     barmode="group",
                     height=400
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             with col2:
                 st.subheader("Таблиця цін")
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(df, width='stretch', hide_index=True)
                 
                 # Розрахунок спреду
                 df["Spread"] = df["Sell Price"] - df["Buy Price"]
@@ -360,7 +360,7 @@ with tab5:
                 st.subheader("Спред")
                 st.dataframe(
                     df[["Symbol", "Spread", "Spread %"]],
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True
                 )
         else:
@@ -400,7 +400,7 @@ with tab6:
         )
         st.session_state.selected_realtime_symbol = target_symbol
     with col_ctrl3:
-        if st.button("🗑️ Очистити графік", key="clear_realtime_history", use_container_width=True):
+        if st.button("🗑️ Очистити графік", key="clear_realtime_history", width='stretch'):
             if target_symbol in st.session_state.price_history:
                 st.session_state.price_history[target_symbol] = []
 
@@ -489,7 +489,7 @@ with tab6:
                 hovermode='x unified',
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
-            st.plotly_chart(fig, use_container_width=True, key="realtime_chart")
+            st.plotly_chart(fig, width='stretch', key="realtime_chart")
             
             # Показуємо поточні значення
             if len(buys) > 0 and len(sells) > 0:
