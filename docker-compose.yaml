@@ -57,6 +57,7 @@ services:
     restart: always
     volumes:
       - "./setup:/opt/app:ro"
+      - cassandra-data:/var/lib/cassandra
     networks:
       - internal-network
 
@@ -257,3 +258,4 @@ networks:
 volumes:
   pgdata:
   pgadmin-data:
+  cassandra-data:
