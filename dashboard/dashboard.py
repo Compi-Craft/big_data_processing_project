@@ -4,7 +4,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-import time
 import numpy as np
 
 # Конфігурація сторінки
@@ -62,13 +61,6 @@ with col3:
 # Sidebar для налаштувань
 st.sidebar.header("⚙️ Налаштування")
 
-# Автоматичне оновлення
-auto_refresh = st.sidebar.checkbox("🔄 Автоматичне оновлення", value=False)
-if auto_refresh:
-    refresh_interval = st.sidebar.slider("Інтервал оновлення (секунди)", min_value=5, max_value=300, value=30)
-    time.sleep(refresh_interval)
-    st.rerun()
-
 # Отримання списку символів з топ обсягів
 top_all = fetch_api("/top_n_highest_volumes", params={"top_n": 50})
 if top_all and top_all.get("top_symbols"):
@@ -77,11 +69,124 @@ else:
     # Fallback список символів
     symbols_list = ["XBTUSD", "ETHUSD", "ADAUSD", "SOLUSD", "DOGEUSD", "XRPUSD", "LINKUSD"]
 
-# Вибір символу для детального аналізу
-selected_symbol = st.sidebar.selectbox("Виберіть символ", options=symbols_list if symbols_list else ["XBTUSD"])
+# Значення за замовчуванням - перший символ зі списку
+default_symbol = symbols_list[0] if symbols_list else "XBTUSD"
 
 # Опція логарифмічної шкали
-use_log_scale = st.sidebar.checkbox("📊 Використовувати логарифмічну шкалу", value=False, help="Корисно для даних з великою різницею між значеннями")
+if "use_log_scale" not in st.session_state:
+    st.session_state.use_log_scale = False
+
+# Використовуємо query params для збереження стану табу
+query_params = st.query_params
+active_tab = query_params.get("tab", ["0"])[0] if "tab" in query_params else None
+
+# JavaScript для збереження позиції скролу та активного табу
+preserve_state_js = """
+<script>
+(function() {
+    // Зберігаємо позицію скролу
+    let scrollPosition = sessionStorage.getItem('scrollPosition');
+    if (scrollPosition) {
+        setTimeout(function() {
+            window.scrollTo(0, parseInt(scrollPosition));
+        }, 100);
+    }
+    
+    // Зберігаємо позицію скролу під час скролу
+    let scrollTimeout;
+    window.addEventListener('scroll', function() {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(function() {
+            sessionStorage.setItem('scrollPosition', window.pageYOffset || document.documentElement.scrollTop);
+        }, 100);
+    });
+    
+    // Функція для відновлення активного табу
+    function restoreActiveTab() {
+        const savedTab = sessionStorage.getItem('activeTab');
+        const urlTab = new URL(window.location).searchParams.get('tab');
+        const tabToRestore = urlTab !== null ? parseInt(urlTab) : (savedTab !== null ? parseInt(savedTab) : null);
+        
+        if (tabToRestore !== null) {
+            // Шукаємо таб кнопки різними способами
+            let tabButtons = document.querySelectorAll('[data-baseweb="tab"]');
+            if (tabButtons.length === 0) {
+                tabButtons = document.querySelectorAll('button[data-testid*="tab"]');
+            }
+            if (tabButtons.length === 0) {
+                tabButtons = document.querySelectorAll('button[role="tab"]');
+            }
+            
+            if (tabButtons.length > tabToRestore && tabButtons[tabToRestore]) {
+                // Перевіряємо, чи таб вже активний
+                const isActive = tabButtons[tabToRestore].getAttribute('aria-selected') === 'true' ||
+                                tabButtons[tabToRestore].classList.contains('st-emotion-cache-1in6wow');
+                
+                if (!isActive) {
+                    tabButtons[tabToRestore].click();
+                }
+            }
+        }
+    }
+    
+    // Зберігаємо активний таб при кліку
+    function setupTabListeners() {
+        let tabButtons = document.querySelectorAll('[data-baseweb="tab"]');
+        if (tabButtons.length === 0) {
+            tabButtons = document.querySelectorAll('button[data-testid*="tab"]');
+        }
+        if (tabButtons.length === 0) {
+            tabButtons = document.querySelectorAll('button[role="tab"]');
+        }
+        
+        tabButtons.forEach((tab, index) => {
+            // Видаляємо старі слухачі
+            const newTab = tab.cloneNode(true);
+            tab.parentNode.replaceChild(newTab, tab);
+            
+            newTab.addEventListener('click', function() {
+                sessionStorage.setItem('activeTab', index.toString());
+                const url = new URL(window.location);
+                url.searchParams.set('tab', index.toString());
+                window.history.replaceState({}, '', url);
+            });
+        });
+    }
+    
+    // Відновлюємо таб кілька разів для надійності
+    setTimeout(restoreActiveTab, 100);
+    setTimeout(restoreActiveTab, 300);
+    setTimeout(restoreActiveTab, 500);
+    setTimeout(setupTabListeners, 200);
+    
+    // Спостерігаємо за змінами DOM для Streamlit rerun
+    const observer = new MutationObserver(function(mutations) {
+        let hasTabs = document.querySelectorAll('[data-baseweb="tab"]').length > 0 ||
+                     document.querySelectorAll('button[data-testid*="tab"]').length > 0 ||
+                     document.querySelectorAll('button[role="tab"]').length > 0;
+        
+        if (hasTabs) {
+            setTimeout(setupTabListeners, 100);
+            setTimeout(restoreActiveTab, 200);
+        }
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+})();
+</script>
+"""
+st.markdown(preserve_state_js, unsafe_allow_html=True)
+
+use_log_scale = st.sidebar.checkbox(
+    "📊 Використовувати логарифмічну шкалу", 
+    value=st.session_state.use_log_scale, 
+    help="Корисно для даних з великою різницею між значеннями",
+    key="log_scale_checkbox"
+)
+st.session_state.use_log_scale = use_log_scale
 
 # Tabs для різних секцій
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -260,14 +365,20 @@ with tab2:
                         y_column2 = "log_volume"
                         y_label2 = "Обсяг (log scale)"
                     
-                    fig2 = px.area(
+                    # Сортуємо дані для правильного відображення
+                    plot_data2 = plot_data2.sort_values(["symbol", "hour_start"])
+                    
+                    fig2 = px.line(
                         plot_data2,
                         x="hour_start",
                         y=y_column2,
                         color="symbol",
                         title="Обсяг торгівлі" + (" (логарифмічна шкала)" if use_log_scale else ""),
-                        labels={"hour_start": "Час", y_column2: y_label2}
+                        labels={"hour_start": "Час", y_column2: y_label2},
+                        markers=True
                     )
+                    # Додаємо заповнення під лінією для кращої візуалізації
+                    fig2.update_traces(fill='tozeroy', mode='lines+markers')
                     st.plotly_chart(fig2, use_container_width=True)
                 
                 # Таблиця з даними
@@ -292,7 +403,7 @@ with tab3:
     if "detail_analysis_result" not in st.session_state:
         st.session_state.detail_analysis_result = None
     if "detail_symbol" not in st.session_state:
-        st.session_state.detail_symbol = selected_symbol
+        st.session_state.detail_symbol = default_symbol
     if "detail_minutes" not in st.session_state:
         st.session_state.detail_minutes = 5
     
@@ -302,12 +413,12 @@ with tab3:
         # Визначаємо індекс для selectbox
         symbol_options = symbols_list if symbols_list else ["XBTUSD"]
         default_index = 0
-        if selected_symbol in symbol_options:
-            default_index = symbol_options.index(selected_symbol)
-        symbol_input = st.selectbox("Символ", options=symbol_options, index=default_index)
+        if st.session_state.detail_symbol in symbol_options:
+            default_index = symbol_options.index(st.session_state.detail_symbol)
+        symbol_input = st.selectbox("Символ", options=symbol_options, index=default_index, key="detail_symbol_select")
     
     with col2:
-        n_minutes = st.number_input("Кількість хвилин", min_value=1, max_value=1440, value=st.session_state.detail_minutes)
+        n_minutes = st.number_input("Кількість хвилин", min_value=1, max_value=1440, value=st.session_state.detail_minutes, key="detail_minutes_input")
     
     if st.button("Отримати дані", type="primary", key="get_detail_data"):
         if symbol_input:
@@ -347,7 +458,20 @@ with tab3:
 with tab4:
     st.header("Топ символів за обсягом торгівлі")
     
-    top_n = st.slider("Кількість топ символів", min_value=1, max_value=20, value=10)
+    # Ініціалізація session state для збереження значення slider
+    if "top_n_value" not in st.session_state:
+        st.session_state.top_n_value = 3
+    
+    top_n = st.slider(
+        "Кількість топ символів", 
+        min_value=1, 
+        max_value=5, 
+        value=st.session_state.top_n_value,
+        key="top_n_slider"
+    )
+    
+    # Оновлюємо session state
+    st.session_state.top_n_value = top_n
     
     top_volumes = fetch_api("/top_n_highest_volumes", params={"top_n": top_n})
     
@@ -392,7 +516,7 @@ with tab5:
     
     # Ініціалізація session state для збереження вибраних символів
     if "selected_price_symbols" not in st.session_state:
-        st.session_state.selected_price_symbols = [selected_symbol] if selected_symbol in symbols_list else []
+        st.session_state.selected_price_symbols = [default_symbol] if default_symbol in symbols_list else []
     
     # Мультиселект для вибору символів
     selected_symbols = st.multiselect(
