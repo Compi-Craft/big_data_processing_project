@@ -2,6 +2,10 @@ from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 import pyspark.sql.types as T
 from pyspark.sql.streaming import *
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 input_schema = T.StructType([
@@ -59,8 +63,8 @@ df_transformed = (df
                     ).select(
                         F.col("timestamp_to_sec").alias("currenttimestamp"),
                         F.col("data.symbol"),
-                        F.col("data.bidPrice").alias("sellprice"),
-                        F.col("data.askPrice").alias("buyprice")
+                        F.col("data.askPrice").alias("sellprice"),  # askPrice = sell price (ціна продажу)
+                        F.col("data.bidPrice").alias("buyprice")    # bidPrice = buy price (ціна покупки)
                     ).withColumn("value", F.to_json(F.struct("*"))
                     ).select(
                         F.from_json(
@@ -69,10 +73,40 @@ df_transformed = (df
                         ).alias("data")
                     ).select("data.*"))
 
-(df_transformed.writeStream
-    .format("org.apache.spark.sql.cassandra")
-    .option("keyspace", "orders")
-    .option("table", "current_price")
+def process_batch(batch_df, batch_id):
+    """Обробка кожного batch даних з логуванням"""
+    try:
+        row_count = batch_df.count()
+        logger.info(f"Processing batch {batch_id} with {row_count} rows")
+        
+        if row_count > 0:
+            # Показуємо приклад даних
+            logger.info("Sample data from batch:")
+            batch_df.show(5, truncate=False)
+            
+            # Записуємо в Cassandra
+            batch_df.write \
+                .format("org.apache.spark.sql.cassandra") \
+                .mode("append") \
+                .option("keyspace", "orders") \
+                .option("table", "current_price") \
+                .save()
+            
+            logger.info(f"Successfully wrote {row_count} rows to Cassandra")
+        else:
+            logger.warning(f"Batch {batch_id} is empty - no data to write")
+    except Exception as e:
+        logger.error(f"Error processing batch {batch_id}: {str(e)}", exc_info=True)
+        raise
+
+logger.info("Starting streaming query to Cassandra...")
+logger.info("Waiting for data from Kafka topic 'orders'...")
+
+query = (df_transformed.writeStream
+    .foreachBatch(process_batch)
     .option("checkpointLocation", "/tmp/orders_checkpoint")
-    .start()
-    .awaitTermination())
+    .outputMode("update")
+    .trigger(processingTime='10 seconds')
+    .start())
+
+query.awaitTermination()
