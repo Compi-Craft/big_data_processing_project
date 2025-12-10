@@ -172,8 +172,12 @@ with tab1:
 
 # TAB 2: Статистика за 12 годин
 with tab2:
-    st.header("Статистика за 12 годин")
-    hourly_stats = fetch_api("/hourly_stats_last_12_hours")
+    st.header("Статистика за обраний період")
+    
+    # Повзунок для вибору кількості годин
+    n_hours = st.slider("Кількість годин", 1, 24, 12, key="hours_slider")
+    
+    hourly_stats = fetch_api("/hourly_stats_last_12_hours", params={"n_hours": n_hours})
     
     if hourly_stats and hourly_stats.get("stats"):
         all_data = []
@@ -229,7 +233,7 @@ with tab2:
             st.download_button(
                 label="📥 Експортувати в CSV",
                 data=csv_data,
-                file_name=f"stats_12h_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                file_name=f"stats_{n_hours}h_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
                 key="export_stats_12h"
             )

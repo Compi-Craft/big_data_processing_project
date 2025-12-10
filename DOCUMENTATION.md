@@ -37,7 +37,7 @@ The platform successfully processes data for five major cryptocurrency pairs (XB
 
 - **Real-time price monitoring** with sub-second latency
 - **Historical trade analysis** with hourly aggregation
-- **Volume and transaction statistics** for 6-hour and 12-hour windows
+- **Volume and transaction statistics** for 6-hour window and configurable hourly windows (1-24 hours)
 - **Interactive web dashboard** with multiple visualization options
 - **RESTful API** for programmatic data access
 - **CSV export functionality** for external analysis
@@ -227,7 +227,7 @@ The platform follows a microservices architecture pattern with clear separation 
 2. **Transaction Statistics**:
    - `GET /transactions_count_last_6_hours`: Total transaction count per symbol (6h window)
    - `GET /trade_volume_last_6_hours`: Total trade volume per symbol (6h window)
-   - `GET /hourly_stats_last_12_hours`: Hourly breakdown for 12-hour window
+   - `GET /hourly_stats_last_12_hours?n_hours={n}`: Hourly breakdown for configurable time window (1-24 hours)
 
 3. **Detailed Analysis**:
    - `GET /transactions_in_last_n_min?symbol={symbol}&n_minutes={n}`: Transaction count for specific symbol and time window
@@ -249,7 +249,8 @@ The platform follows a microservices architecture pattern with clear separation 
    - Data tables with CSV export
    - Logarithmic scale option
 
-2. **12-Hour Statistics Tab**:
+2. **📊 12 Годин (Configurable Hours Statistics)**:
+   - Interactive slider to select time window (1-24 hours)
    - Line charts showing hourly trends
    - Detailed data table with CSV export
    - Multi-symbol comparison
@@ -323,7 +324,7 @@ The platform follows a microservices architecture pattern with clear separation 
 - **API Response Times**:
   - `/current_price`: < 100ms (Cassandra query)
   - `/transactions_count_last_6_hours`: < 500ms (PostgreSQL aggregation)
-  - `/hourly_stats_last_12_hours`: < 1s (PostgreSQL query with joins)
+  - `/hourly_stats_last_12_hours?n_hours={n}`: < 1s (PostgreSQL query with joins, scales with n_hours)
 
 #### 3.1.3 Data Quality
 
@@ -338,7 +339,7 @@ The platform follows a microservices architecture pattern with clear separation 
 The platform enables analysis of trading volumes across different time windows:
 
 - **6-Hour Window**: Identifies short-term trading patterns
-- **12-Hour Window**: Reveals intraday trends
+- **Configurable Window (1-24 hours)**: Reveals intraday and multi-day trends
 - **Hourly Aggregation**: Provides granular insights into market activity
 
 **Key Insights**:
@@ -429,7 +430,8 @@ Real-time price monitoring provides:
 **Use Case**: Analysts need historical trading statistics
 
 **Solution**:
-- 6-hour and 12-hour aggregated statistics
+- 6-hour aggregated statistics
+- Configurable hourly statistics (1-24 hours)
 - CSV export functionality for external analysis
 - Detailed transaction analysis for specific time windows
 
@@ -440,7 +442,7 @@ Real-time price monitoring provides:
 **Use Case**: Identify trading patterns and market trends
 
 **Solution**:
-- Hourly statistics with 12-hour visualization
+- Hourly statistics with configurable time window (1-24 hours)
 - Top volume rankings
 - Logarithmic scale for better visualization of large value ranges
 
@@ -477,10 +479,11 @@ Real-time price monitoring provides:
    - Export data to CSV
    - Toggle logarithmic scale for better visualization
 
-2. **📊 12 Годин (12 Hours)**:
+2. **📊 12 Годин (Configurable Hours)**:
+   - Interactive slider to select time window (1-24 hours, default: 12)
    - Hourly breakdown charts
    - Detailed data table
-   - CSV export available
+   - CSV export available (filename includes selected hours)
 
 3. **🔍 Аналіз (Analysis)**:
    - Select symbol from dropdown
@@ -512,9 +515,9 @@ Real-time price monitoring provides:
 - Applies to all charts automatically
 
 **CSV Export**:
-- Available for 6-hour and 12-hour statistics
+- Available for 6-hour and configurable hourly statistics
 - Click "📥 Експортувати в CSV" button
-- Files include timestamp in filename
+- Files include timestamp and selected hours in filename (e.g., `stats_12h_20241209_140530.csv`)
 - UTF-8-BOM encoding for Excel compatibility
 
 **Real-time Updates**:
@@ -559,9 +562,10 @@ Response: {
 }
 ```
 
-**Hourly Statistics (12 hours)**:
+**Hourly Statistics (Configurable Hours)**:
 ```bash
-GET /hourly_stats_last_12_hours
+GET /hourly_stats_last_12_hours?n_hours=12
+# n_hours parameter: 1-24 (default: 12)
 Response: {
   "stats": {
     "XBTUSDT": [
@@ -618,16 +622,17 @@ Response: {
 
 #### 4.3.1 CSV Export from Dashboard
 
-1. Navigate to 6-hour or 12-hour statistics tab
-2. View data table
-3. Click "📥 Експортувати в CSV" button
-4. File downloads automatically with timestamp
+1. Navigate to 6-hour or configurable hours statistics tab
+2. (For configurable hours) Adjust slider to select desired time window (1-24 hours)
+3. View data table
+4. Click "📥 Експортувати в CSV" button
+5. File downloads automatically with timestamp and selected hours
 
 **File Format**:
 - UTF-8-BOM encoding
 - Comma-separated values
 - Headers in first row
-- Timestamp in filename: `{type}_{window}_{YYYYMMDD_HHMMSS}.csv`
+- Timestamp and hours in filename: `{type}_{hours}h_{YYYYMMDD_HHMMSS}.csv` (e.g., `stats_12h_20241209_140530.csv`)
 
 #### 4.3.2 Direct Database Access
 
@@ -668,6 +673,10 @@ print(f"Buy: {price_data['Buy price']}, Sell: {price_data['Sell price']}")
 # Get 6-hour statistics
 response = requests.get(f"{API_BASE}/transactions_count_last_6_hours")
 stats = response.json()
+
+# Get hourly statistics for configurable time window (e.g., 12 hours)
+response = requests.get(f"{API_BASE}/hourly_stats_last_12_hours", params={"n_hours": 12})
+hourly_stats = response.json()
 ```
 
 #### 4.4.2 JavaScript/Node.js Client

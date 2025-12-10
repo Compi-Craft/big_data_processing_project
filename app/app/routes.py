@@ -81,10 +81,10 @@ def trade_volume_last_6_hours(db: Session = Depends(get_db)):
     return {"count": data}
 
 @router.get("/hourly_stats_last_12_hours")
-def hourly_stats_last_12_hours(db: Session = Depends(get_db)):
+def hourly_stats_last_12_hours(n_hours: int, db: Session = Depends(get_db)):
     now = datetime.now(ZoneInfo("Europe/Kyiv")).replace(minute=0, second=0, microsecond=0).replace(tzinfo=None)
     end_time = now
-    start_time = end_time - timedelta(hours=12)
+    start_time = end_time - timedelta(hours=n_hours)
 
     rows = db.query(
         SymbolStatsLastHour.symbol,
